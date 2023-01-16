@@ -3,7 +3,7 @@
 
 const { getSelectors, FacetCutAction } = require('./libraries/diamond.js')
 
-async function deployDiamond () {
+async function deployDiamond() {
   const accounts = await ethers.getSigners()
   const contractOwner = accounts[0]
 
@@ -32,18 +32,25 @@ async function deployDiamond () {
   console.log('Deploying facets')
   const FacetNames = [
     'DiamondLoupeFacet',
-    'OwnershipFacet'
+    'EventFacet'
   ]
   const cut = []
+
   for (const FacetName of FacetNames) {
     const Facet = await ethers.getContractFactory(FacetName)
     const facet = await Facet.deploy()
     await facet.deployed()
-    console.log(`${FacetName} deployed: ${facet.address}`)
+    console.log(`facet : ${FacetName} deployed: ${facet.address}`)
+
+    let selectors = getSelectors(facet)
+    if (FacetName === 'EventFacet') {
+      selectors = getSelectors(facet).remove(['supportsInterface(bytes4)'])
+    }
+
     cut.push({
       facetAddress: facet.address,
       action: FacetCutAction.Add,
-      functionSelectors: getSelectors(facet)
+      functionSelectors: selectors
     })
   }
 
@@ -62,6 +69,15 @@ async function deployDiamond () {
     throw Error(`Diamond upgrade failed: ${tx.hash}`)
   }
   console.log('Completed diamond cut')
+
+  //Diamond Factory
+
+  const DiamondFactory = await ethers.getContractFactory('DiamondFactory')
+  const diamondFactory = await DiamondFactory.deploy(diamondCut.address)
+  await diamondFactory.deployed()
+
+  console.log('Diamond Factory deployed at : ', diamondFactory.address)
+
   return diamond.address
 }
 
